@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "cbz-maker"
+version = "0.1.0"
+description = "A CBZ scraper and volume making project"
+authors = ["Radhakrishna Sanka <rkrishnasanka@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "cbz_maker"}]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+bs4 = "^0.0.1"
+requests = "^2.30.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
