@@ -16,7 +16,7 @@ CLEANUP_ENABLED = False
 NUM_RETRIES = 5
 NUM_THREADS = 8
 
-MAIN_QUEUE = Queue(maxsize=0)
+MAIN_QUEUE: 'Queue[Tuple[str, int]]' = Queue(maxsize=0)
 
 
 def create_cbz(chapter_folder: Path):
@@ -97,7 +97,12 @@ def _find_all_images(url: str) -> List[str]:
     raise NotImplementedError('This function is not implemented yet')
 
 
-def download_chapter(que: Queue, find_all_images: Callable[[str], List[str]]=_find_all_images, naming_info: Optional[Tuple[str, str]]= None):
+def download_chapter(
+    que: Queue, 
+    find_all_images: Callable[[str], List[str]]=_find_all_images, 
+    series_name: str = 'unnamed-series',
+    chapter_number_regex_pattern: Optional[str] = None,
+):
     """Download the chapter from the url
 
     This function is the primary consumer of the queue. It takes the url from the queue and downloads the chapter.
@@ -108,11 +113,12 @@ def download_chapter(que: Queue, find_all_images: Callable[[str], List[str]]=_fi
     Args:
         que (Queue): The queue to get the url from
         find_all_images (Callable[[str], List[str]], optional): Function ref that will find the images. Defaults to _find_all_images.
-        naming_info (Optional[Tuple[str, str]], optional): Naming info thats used to name the series and the regex pattern for parsing the chapter from the url. Defaults to None.
+        series_name (str, optional): The name of the series. Defaults to 'unnamed-series'.
+        chapter_number_regex_pattern (Optional[str], optional): The regex pattern for finding the chapter number in the url. Defaults to None.
     """
     while que.empty() is False:
         # Get the url from the queue
-        url = que.get()
+        url, chapter_number = que.get()
         # Go through each url and download the html
         # Get the HTML from the page
         chapter_name = url.split('/')[-1]
@@ -121,21 +127,27 @@ def download_chapter(que: Queue, find_all_images: Callable[[str], List[str]]=_fi
         print(f'Found {len(image_urls)} images')
 
         # Extract the chapter number from the chapter_name and replace it with a padded number
-        if naming_info is None:
+        # if no chapter number is found
+        if chapter_number is None:
             match = re.search(r'\d+', chapter_name)
             if match:
                 chapter_number = match.group(0)
                 padded_number = f'{int(chapter_number):05d}'
-                chapter_name = re.sub(r'\d+', padded_number, chapter_name)
-        else:
-            series_name, chapter_number_pattern = naming_info
-
-            match = re.search(chapter_number_pattern, chapter_name)
+                chapter_name = f'{series_name}-{padded_number}'
+        
+        elif chapter_number_regex_pattern is not None:
+            match = re.search(chapter_number_regex_pattern, chapter_name)
             if match:
                 chapter_number = match.group(0)
                 padded_number = f'{int(chapter_number):05d}'
                 chapter_name = f'{series_name}-{padded_number}'
-        print(chapter_name)    # Create a new folder for the chapter using pathlib
+
+        else:
+            # If chapter number is provided, replace the chapter number in the chapter name
+            padded_number = f'{int(chapter_number):05d}'
+            chapter_name = f'{series_name}-{padded_number}'
+        
+        print(f'Chapter Name: {chapter_name}')    # Create a new folder for the chapter using pathlib
         chapter_folder = Path(__file__).parent.joinpath(chapter_name)
         
         # Create the folder if it doesn't exist
@@ -182,7 +194,14 @@ def cleanup_url(url: str) -> str:
     return url
 
 
-def start_download(chapter_urls_file: Path, image_finder_callback: Callable[[str], List[str]], naming_info: Optional[Tuple[str, str]]= None, reverse_url_order: bool = False):
+def start_download(
+    chapter_urls_file: Path,
+    image_finder_callback: Callable[[str], List[str]], 
+    series_name: str, 
+    chapter_number_regex: Optional[str], 
+    reverse_url_order: bool = False,
+    overwrite_chapter_numbers: bool = False
+):
     """Start the download of the chapters
 
     This is the starting point for the downloader. It reads the urls from the file and puts them in the queue.
@@ -190,8 +209,10 @@ def start_download(chapter_urls_file: Path, image_finder_callback: Callable[[str
     Args:
         chapter_urls_file (Path): The path to the file containing the urls
         image_finder_callback (Callable[[str], List[str]]): The function that will find the images in the url
-        naming_info (Optional[Tuple[str, str]], optional): Naming info tuple that includes the title and the regex for the chapter numbers in the url. Defaults to None.
+        series_name (str): The name of the series
+        chapter_number_regex (Optional[str]): The regex pattern for finding the chapter number in the url. If none, it doesn't try to find the chapter number
         reverse_url_order (bool, optional): If the urls needs to downloaded in the reverse order in the text file. Defaults to False.
+        overwrite_chapter_numbers (bool, optional): If the chapter numbers in the url needs to be overwritten with the chapter numbers in the text file. Defaults to False.
     """
     
     # Read the urls from the file `chapterlisturls.txt`
@@ -202,7 +223,7 @@ def start_download(chapter_urls_file: Path, image_finder_callback: Callable[[str
     if reverse_url_order:
         chapter_urls.reverse()
 
-    #split the urls into chunks of 10
+    chapter_number_index = 1
     for url in chapter_urls:
         # Skip if empty url
         if url == "":
@@ -210,10 +231,12 @@ def start_download(chapter_urls_file: Path, image_finder_callback: Callable[[str
         # Cleanup the url
         url = cleanup_url(url)
         # Put the pdf link in the queue
-        MAIN_QUEUE.put(url)
-
+        MAIN_QUEUE.put((url, chapter_number_index))
+        chapter_number_index += 1
+    
+    #split the urls into chunks of Threads
     for i in range(NUM_THREADS):
-        worker = Thread(target=download_chapter, args=(MAIN_QUEUE, image_finder_callback, naming_info))
+        worker = Thread(target=download_chapter, args=(MAIN_QUEUE, image_finder_callback, series_name, chapter_number_regex))
         worker.setDaemon(True)
         worker.start()
 
