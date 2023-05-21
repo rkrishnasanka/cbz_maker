@@ -5,30 +5,31 @@ import requests
 import bs4
 
 
+
 def find_image_urls(url) -> List[str]:
     res = requests.get(url)
     soup = bs4.BeautifulSoup(res.text, 'html.parser')
 
     # Find all image elements
-    images = soup.find_all('img')
-    image_metas = [image for image in images if image["class"]]
-
-    # Select the images with the alt that start with "Tensei shitara Slime Datta Ken"
-    images = [image for image in image_metas if 'size-full' in image['class']]
+    images = soup.find_all('meta', {'property':'og:image'})
+    # # Select the images with the alt that start with "Tensei shitara Slime Datta Ken"
+    # images = [image for image in images if image['alt'].startswith('Tensei')]
     # Extract the image urls
-    image_urls = [image['src'] for image in images if 'svg' not in image['src']]
+    image_urls = [image['content'] for image in images]
     return image_urls
 
 
 start_download(
-    chapter_urls_file=Path('/Users/krishna/scraper-projects/demon-slayer/leftovers.txt'),
+    chapter_urls_file=Path('chapterurls.txt'),
     image_finder_callback=find_image_urls,
-    naming_info=('Demon-Slayer', r'\d+'),
-    reverse_url_order=True
+    # naming_info=('Tensei-shitara-Slime-Datta-Kenei', r'\d+-\d+'),
+    series_name='Tensei-shitara-Slime-Datta-Kenei',
+    chapter_number_regex=None,
+    overwrite_chapter_numbers=True,
 )
 
 merge_zip_files(
-    input_folder=Path("/Users/krishna/scraper-projects/demon-slayer"),
-    output_folder=Path("./volumes"), 
+    input_folder=Path("./"),
+    output_folder=Path("./"),
     batch_size=10
 )

@@ -107,9 +107,6 @@ def download_chapter(
 
     This function is the primary consumer of the queue. It takes the url from the queue and downloads the chapter.
     
-    Naming info example:
-    naming_info=('Tensei-shitara-Slime-Datta-Kenei', r'\d+-\d+')
-
     Args:
         que (Queue): The queue to get the url from
         find_all_images (Callable[[str], List[str]], optional): Function ref that will find the images. Defaults to _find_all_images.
@@ -250,7 +247,7 @@ def extract_names_from_ziplist(zip_list:List[str], chapter_number_regex_pattern:
 
     Args:
         zip_list (List[str]): List of zipfiles
-        chapter_number_regex_pattern (str, optional): regex for finding the chapter number from the zipfile name. Defaults to r'^(.*?)-\d+'.
+        chapter_number_regex_pattern (str, optional): regex for finding the chapter number from the zipfile name. Defaults to r\'^(.*?)-\\d+'.
 
     Returns:
         Tuple[str, int, int]: Tuple containing the series name, min chapter number and max chapter number
@@ -301,7 +298,7 @@ def merge_zip_files(input_folder: Path, output_folder: Path = Path("./volumes"),
                 if len(memberlist) == 0:
                     print(f'ERROR: {input_zip} is empty')
                     continue
-                
+
                 extension = memberlist[0].split('.')[-1]
                 memberlist.sort()
                 print(memberlist)
